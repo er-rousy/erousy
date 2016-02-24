@@ -2,7 +2,7 @@ DELIMITER $$
 
 DROP PROCEDURE IF EXISTS `ps_games` $$
 CREATE  PROCEDURE `ps_games`(
-	in platform_name varchar(32),
+	in platform_name varchar(1000),
  	in games_title	varchar(255),
     in games_image_url	text,
     in games_date	date,
@@ -11,47 +11,51 @@ CREATE  PROCEDURE `ps_games`(
     in games_day	varchar(4))
 
 BEGIN
+declare  name_pl varchar(255) default '';
 
- 	-- var existe
-	declare existe int(16) default 0;
-    
-    
-    
+    declare i int default 1;
+
+    declare count int default 0;
     -- this for games
-	declare game_id int(16) default -1;
+	declare mgame_id int(16) default -1;
 	
 	-- this for platforms
-	declare platform_id int(16) default -1;
+	declare mplatform_id int(16) default -1;
     
-	set platform_id =(select  id from platforms where name=platform_name);
-	IF platform_id=-1 THEN
-		INSERT INTO `platforms`( `name`) VALUES (platform_name);
-		SET platform_id = mysql_insert_id();
-	ELSE
-	 UPDATE `platforms` SET `name`= @platform_name WHERE `id`=platform_id;
-	 SET existe=1;
-	END IF;
-	
-	
-    
-	set game_id=(select id from games where title=games_title);
-    
-	if game_id=-1 then
-		INSERT INTO `games`(`title`, `image_url`, `date`, `year`, `month`, `day`) 
-		VALUES (games_title,games_image_url,games_date,games_year,games_month,games_day);
-		set game_id = mysql_insert_id();
+    	if exists(select 1=1 from games where title=games_title) then
+        begin 
+            set mgame_id = (select id from games where title=games_title);
+            UPDATE `games` SET `title`=games_title,`image_url`=games_image_url,`date`=games_date,`year`=games_year,`month`=games_month,`day`=games_day WHERE `id`=mgame_id;
+        end;
 	else
-	UPDATE `games` SET `title`=games_title,`image_url`=games_image_url,`date`=games_date,`year`=games_year,`month`=games_month,`day`=games_day WHERE `id`=game_id;
-	 set existe=existe+1;
+        begin
+            INSERT INTO `games`(`title`, `image_url`, `date`, `year`, `month`, `day`) 
+            VALUES (games_title,games_image_url,games_date,games_year,games_month,games_day);
+            set mgame_id = LAST_INSERT_ID();
+        end;
 	end if;
     
-    
-    
-	if existe<>2 then 
+    set count=LENGTH(platform_name) - LENGTH(REPLACE(platform_name, ',', '')) + 1;
+set i=1;
+while i<=count do
+set name_pl =SUBSTRING_INDEX(SUBSTRING_INDEX(platform_name, ',', i) , ',' , -1 ) ;
+	IF EXISTS (select  * from platforms where name=name_pl) THEN
+    begin
+        set mplatform_id=(select  id from platforms where name=name_pl);
+    end;
+	ELSE
+     begin
+	    INSERT INTO `platforms`( `name`) VALUES (name_pl);
+		SET mplatform_id = LAST_INSERT_ID();
+     end;
+	END IF;
+
+	if not exists(select * from supports where game_id=mgame_id and platform_id=mplatform_id ) then 
 		INSERT INTO `supports`( `game_id`, `platform_id`)
-		VALUES (game_id,platform_id);
+		VALUES (mgame_id,mplatform_id);
 	end if;
-    
+    set i=i+1;
+  end while;  
 END $$
 
 DELIMITER ;
